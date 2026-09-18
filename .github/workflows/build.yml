@@ -1,0 +1,41 @@
+name: Build Kaeru X6711
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf python3 python3-pip git make
+
+      - name: Install lkpatcher
+        run: pip3 install --upgrade git+https://github.com/R0rt1z2/lkpatcher
+
+      - name: Build kaeru payload
+        run: |
+          make clean || true
+          make distclean || true
+          make x6711_defconfig
+          make -j$(nproc)
+
+      - name: Get LK image
+        run: |
+          echo "NOTE: LK image must be provided manually or via release trigger"
+          echo "For now, building payload only"
+
+      - name: Upload payload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kaeru-payload-x6711
+          path: out/
+          retention-days: 5
