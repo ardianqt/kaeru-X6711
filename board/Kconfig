@@ -598,4 +598,10 @@ menu "Device Support"
         default n
         help
           Say Y if you want to include support for TECNO-LH8n
+
+    config INFINIX_X6711
+        bool "Support Infinix X6711"
+        default n
+        help
+          Say Y if you want to include support for Infinix X6711
 endmenu

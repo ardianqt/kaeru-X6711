@@ -87,3 +87,4 @@ lib-$(CONFIG_AMAZON_ROOK) += amazon/board-rook.o
 lib-$(CONFIG_AMAZON_KARAT) += amazon/board-karat.o
 lib-$(CONFIG_AMAZON_SUNSTONE) += amazon/board-sunstone.o
 lib-$(CONFIG_TECNO_LH8N) += tecno/board-lh8n.o
+lib-$(CONFIG_INFINIX_X6711) += infinix/board-x6711.o
