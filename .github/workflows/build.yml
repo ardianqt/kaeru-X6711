@@ -4,11 +4,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      lk_url:
-        description: 'URL to LK image (optional - will build payload only if not provided)'
-        required: false
-        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,8 +30,6 @@ jobs:
             const start = new Date();
             const pad = (n) => String(n).padStart(2, '0');
             const stamp = `${start.getUTCFullYear()}.${pad(start.getUTCMonth() + 1)}.${pad(start.getUTCDate())}-${pad(start.getUTCHours())}${pad(start.getUTCMinutes())}${pad(start.getUTCSeconds())}`;
-            const lkUrl = context.payload.inputs?.lk_url || '';
-            const hasLk = lkUrl && lkUrl.length > 0;
             const releaseBody = [
               '## Kaeru X6711 Nightly',
               '',
@@ -44,33 +37,21 @@ jobs:
               '',
               '### What is this?',
               '',
-              'Kaeru patch for Infinix X6711 (MT6833) bootloader.',
-              'Patches LK to disable orange state, spoof green state, and lock VBMeta.',
+              'Full patched LK for Infinix X6711 (MT6833).',
+              'Ready to flash - includes orange state disable, green state spoof, VBMeta lock spoof.',
               '',
               '### Downloads',
               '',
-              hasLk ? '- `x6711-kaeru.bin` - Full patched LK image (ready to flash)' : '',
-              '- `kaeru` - Kaeru payload (for manual patching)',
+              '- `x6711-kaeru.bin` - Full patched LK (~1.37MB, ready to flash)',
+              '- `kaeru` - Raw kaeru payload',
               '- `stageone` - Stage1 loader',
               '',
-              '### How to use',
+              '### Flash',
               '',
-              hasLk ? [
-                '1. Download `x6711-kaeru.bin`',
-                '2. Flash via fastboot:',
-                '   ```',
-                '   fastboot flash lk x6711-kaeru.bin',
-                '   fastboot reboot',
-                '   ```',
-              ].join('\n') : [
-                'If you have the LK image, run locally:',
-                '```',
-                'python3 utils/patch.py configs/infinix/x6711_defconfig lk.img kaeru -l stageone -o x6711-kaeru.bin',
-                '```',
-                '',
-                'Or trigger workflow with LK URL:',
-                'Actions -> Build & Release -> Run workflow -> Provide lk_url',
-              ].join('\n'),
+              '```',
+              'fastboot flash lk x6711-kaeru.bin',
+              'fastboot reboot',
+              '```',
               '',
               '### Features',
               '',
@@ -121,10 +102,19 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-linux-gnueabihf python3 python3-pip git make wget
+          sudo apt-get install -y gcc-arm-linux-gnueabihf python3 python3-pip git make
 
       - name: Install lkpatcher
         run: pip3 install --upgrade git+https://github.com/R0rt1z2/lkpatcher
+
+      - name: Verify LK image exists
+        run: |
+          if [ ! -f "lk_x6711.img" ]; then
+            echo "ERROR: lk_x6711.img not found in repo"
+            exit 1
+          fi
+          ls -la lk_x6711.img
+          echo "LK image size: $(stat -c%s lk_x6711.img) bytes"
 
       - name: Build kaeru payload
         run: |
@@ -133,44 +123,27 @@ jobs:
           make x6711_defconfig
           make -j$(nproc)
 
-      - name: Check build outputs
-        run: |
-          echo "=== Build outputs ==="
-          ls -la kaeru stageone 2>/dev/null || echo "Some files missing"
-          file kaeru stageone 2>/dev/null || true
-
-      - name: Download LK image if provided
-        if: ${{ github.event.inputs.lk_url != '' }}
-        run: |
-          echo "Downloading LK from: ${{ github.event.inputs.lk_url }}"
-          wget -q "${{ github.event.inputs.lk_url }}" -O lk.img
-          ls -la lk.img
-          file lk.img
-
       - name: Patch LK with kaeru
-        if: ${{ github.event.inputs.lk_url != '' }}
         run: |
-          python3 utils/patch.py configs/infinix/x6711_defconfig lk.img kaeru -l stageone -o x6711-kaeru.bin
+          echo "Patching LK image..."
+          python3 utils/patch.py configs/infinix/x6711_defconfig lk_x6711.img kaeru -l stageone -o x6711-kaeru.bin
+          echo ""
+          echo "=== Patched binary ==="
           ls -la x6711-kaeru.bin
-          echo "Patched binary size: $(stat -c%s x6711-kaeru.bin) bytes"
+          echo "Size: $(stat -c%s x6711-kaeru.bin) bytes"
 
-      - name: Upload payload to release
+      - name: Upload to release
         run: |
-          # Always upload raw payloads
-          for f in kaeru stageone; do
-            if [ -f "$f" ]; then
-              echo "Uploading $f"
-              gh release upload "${{ needs.create-release.outputs.tag }}" "$f" --clobber
-            fi
-          done
+          # Upload patched binary
+          gh release upload "${{ needs.create-release.outputs.tag }}" x6711-kaeru.bin --clobber
+          echo "Uploaded x6711-kaeru.bin"
           
-          # Upload patched binary if it exists
-          if [ -f "x6711-kaeru.bin" ]; then
-            echo "Uploading x6711-kaeru.bin"
-            gh release upload "${{ needs.create-release.outputs.tag }}" x6711-kaeru.bin --clobber
-            echo "Final size: $(stat -c%s x6711-kaeru.bin) bytes"
-          else
-            echo "No patched binary (LK image not provided)"
-          fi
+          # Upload raw payloads
+          gh release upload "${{ needs.create-release.outputs.tag }}" kaeru --clobber
+          gh release upload "${{ needs.create-release.outputs.tag }}" stageone --clobber
+          echo "Uploaded kaeru and stageone"
+          
+          echo "=== Release files ==="
+          gh release view "${{ needs.create-release.outputs.tag }}" --json assets -q '.assets[].name + " (" + (.size|tostring) + " bytes)"'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
