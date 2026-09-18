@@ -42,7 +42,7 @@ jobs:
               '',
               '### How to use',
               '',
-              '1. Download `x6711-kaeru.bin`',
+              '1. Download `x6711-kaeru.bin` and `x6711-stageone.bin`',
               '2. Flash to LK partition via fastboot:',
               '   ```',
               '   fastboot flash lk x6711-kaeru.bin',
@@ -109,9 +109,19 @@ jobs:
           make x6711_defconfig
           make -j$(nproc)
 
-      - name: Rename payload to device name
+      - name: Find and rename build outputs
         run: |
-          cd out
+          echo "=== Build directory ==="
+          pwd
+          ls -la
+          echo ""
+          echo "=== Finding kaeru files ==="
+          find . -maxdepth 2 -name "kaeru" -o -name "stageone" -o -name "*.bin" 2>/dev/null
+          echo ""
+          echo "=== Looking in build output ==="
+          find . -path "*/built-in.o" 2>/dev/null | head -5
+          
+          # The build produces 'kaeru' and 'stageone' in root
           if [ -f "kaeru" ]; then
             cp kaeru x6711-kaeru.bin
             echo "Created x6711-kaeru.bin"
@@ -120,17 +130,21 @@ jobs:
             cp stageone x6711-stageone.bin
             echo "Created x6711-stageone.bin"
           fi
-          ls -la
+          
+          echo ""
+          echo "=== Final files ==="
+          ls -la *.bin 2>/dev/null || echo "No .bin files found"
 
       - name: Upload to release
         run: |
-          cd out
-          for f in x6711-kaeru.bin x6711-stageone.bin kaeru stageone; do
+          for f in x6711-kaeru.bin x6711-stageone.bin; do
             if [ -f "$f" ]; then
               echo "Uploading $f"
               gh release upload "${{ needs.create-release.outputs.tag }}" "$f" --clobber
+            else
+              echo "WARNING: $f not found"
             fi
           done
-          echo "Done uploading"
+          echo "Upload complete"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
