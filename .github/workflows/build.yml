@@ -49,6 +49,13 @@ jobs:
               '   fastboot reboot',
               '   ```',
               '',
+              '### Features',
+              '',
+              '- Orange state warning disabled',
+              '- Green state spoof (verifiedbootstate)',
+              '- VBMeta locked spoof',
+              '- Volume key -> Fastboot override',
+              '',
               '### Credits',
               '',
               '- R0rt1z2 & AntiEngineer - Kaeru framework',
@@ -102,51 +109,28 @@ jobs:
           make x6711_defconfig
           make -j$(nproc)
 
-      - name: Check build output
+      - name: Rename payload to device name
         run: |
-          echo "=== Build output ==="
-          ls -la out/ || echo "No out/ directory"
-          ls -la *.bin 2>/dev/null || echo "No .bin files"
-          find . -name "*.bin" -o -name "kaeru" -o -name "stageone" | head -20
+          cd out
+          if [ -f "kaeru" ]; then
+            cp kaeru x6711-kaeru.bin
+            echo "Created x6711-kaeru.bin"
+          fi
+          if [ -f "stageone" ]; then
+            cp stageone x6711-stageone.bin
+            echo "Created x6711-stageone.bin"
+          fi
+          ls -la
 
-      - name: Upload payload to release
+      - name: Upload to release
         run: |
-          cd out 2>/dev/null || true
-          for f in *.bin kaeru stageone; do
+          cd out
+          for f in x6711-kaeru.bin x6711-stageone.bin kaeru stageone; do
             if [ -f "$f" ]; then
               echo "Uploading $f"
               gh release upload "${{ needs.create-release.outputs.tag }}" "$f" --clobber
             fi
           done
           echo "Done uploading"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  package:
-    needs: [create-release, build]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Download payload from release
-        run: |
-          mkdir -p package
-          gh release download "${{ needs.create-release.outputs.tag }}" -D package/ --pattern "*.bin" || true
-          ls -la package/
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create release archive
-        run: |
-          cd package
-          if ls *.bin 1>/dev/null 2>&1; then
-            tar czf ../kaeru-x6711-nightly.tar.gz *.bin
-            cd ..
-            gh release upload "${{ needs.create-release.outputs.tag }}" kaeru-x6711-nightly.tar.gz --clobber
-            echo "Uploaded archive"
-          else
-            echo "No .bin files to archive"
-          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
